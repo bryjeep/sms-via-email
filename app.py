@@ -121,7 +121,7 @@ def email_to_phone(from_email):
 
 def check_for_missing_settings():
     rv = []
-    for required in ['MAILGUN_DOMAIN', 'MAINGUN_KEY',
+    for required in ['MAILGUN_DOMAIN', 'MAILGUN_KEY',
                      'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN']:
         value = getattr(konf, required)
         if not value:
