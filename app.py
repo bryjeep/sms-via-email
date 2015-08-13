@@ -7,7 +7,6 @@ from flask import request
 from flask import url_for
 from twilio.rest import TwilioRestClient
 import phonenumbers as ph
-import sendgrid
 import simplejson
 
 from konfig import Konfig
@@ -31,9 +30,6 @@ except:
 app = Flask(__name__)
 konf = Konfig()
 twilio_api = TwilioRestClient()
-sendgrid_api = sendgrid.SendGridClient(konf.sendgrid_username,
-                                       konf.sendgrid_password)
-
 
 class InvalidInput(Exception):
     def __init__(self, invalid_input):
@@ -107,7 +103,7 @@ def phone_to_email(potential_number):
     except Exception, e:
         raise InvalidPhoneNumber(str(e))
     phone_number = phone_number.replace('+', '')
-    return("{}@{}".format(phone_number, konf.email_domain))
+    return("{}@{}".format(phone_number, konf.mailgun_domain))
 
 
 def email_to_phone(from_email):
@@ -125,8 +121,7 @@ def email_to_phone(from_email):
 
 def check_for_missing_settings():
     rv = []
-    for required in ['EMAIL_DOMAIN',
-                     'SENDGRID_USERNAME', 'SENDGRID_PASSWORD',
+    for required in ['MAILGUN_DOMAIN', 'MAINGUN_KEY',
                      'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN']:
         value = getattr(konf, required)
         if not value:
@@ -141,6 +136,13 @@ def duplicates_in_address_book():
         duplcates_found = True
     return duplcates_found
 
+def send_mail(email):
+    r = requests.\
+        post("https://api.mailgun.net/v2/%s/messages" % konf.mailgun_domain,
+            auth=("api", konf.mailgun_key),
+            data=email
+        )
+    return r
 
 @app.route('/')
 def main():
@@ -161,10 +163,10 @@ def main():
         template = ("Congratulations, "
                     "this software appears to be configured correctly."
                     "<br/><br/>"
-                    "Use the following URLs to configure SendGrid "
+                    "Use the following URLs to configure MailGun "
                     "and Twilio:"
                     "<br/><br/>"
-                    "SendGrid Inbound Parse Webhook URL: {}"
+                    "MailGun Inbound Parse Webhook URL: {}"
                     "<br/>"
                     "Twilio Messaging Request URL: {}")
         message = template.format(url_for('handle_email', _external=True),
@@ -179,14 +181,13 @@ def handle_sms():
         email = {
             'text': request.form['Body'],
             'subject': 'Text message',
-            'from_email': phone_to_email(request.form['From']),
+            'from': phone_to_email(request.form['From']),
             'to': lookup.email_for_phone(request.form['To'])
         }
     except InvalidInput, e:
         return warn(str(e)), 400
 
-    message = sendgrid.Mail(**email)
-    (status, msg) = sendgrid_api.send(message)
+    send_mail(email)
     if 'errors' in msg:
         template = "Error sending message to SendGrid: {}"
         errors = ', '.join(msg['errors'])
