@@ -8,7 +8,7 @@ from flask import url_for
 from twilio.rest import TwilioRestClient
 import phonenumbers as ph
 import simplejson
-
+import requests
 from konfig import Konfig
 
 
